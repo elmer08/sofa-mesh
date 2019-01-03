@@ -115,7 +115,7 @@ ignored = [
 
 [[constraint]]
   name = "github.com/alipay/sofa-mosn"
-  version = "0.2.0"
+  branch = "go-control-plane-upgrade-0.6.3"
 
 [[constraint]]
   name = "github.com/fluent/fluent-logger-golang"
