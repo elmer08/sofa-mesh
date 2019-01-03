@@ -1,9 +1,5 @@
 /*
-<<<<<<< HEAD
-Copyright 2018 The Kubernetes Authors.
-=======
 Copyright The Kubernetes Authors.
->>>>>>> 1.1.0-snapshot.4
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,21 +21,15 @@ package scheduling
 import (
 	internalinterfaces "k8s.io/client-go/informers/internalinterfaces"
 	v1alpha1 "k8s.io/client-go/informers/scheduling/v1alpha1"
-<<<<<<< HEAD
-=======
 	v1beta1 "k8s.io/client-go/informers/scheduling/v1beta1"
->>>>>>> 1.1.0-snapshot.4
 )
 
 // Interface provides access to each of this group's versions.
 type Interface interface {
 	// V1alpha1 provides access to shared informers for resources in V1alpha1.
 	V1alpha1() v1alpha1.Interface
-<<<<<<< HEAD
-=======
 	// V1beta1 provides access to shared informers for resources in V1beta1.
 	V1beta1() v1beta1.Interface
->>>>>>> 1.1.0-snapshot.4
 }
 
 type group struct {
@@ -57,11 +47,8 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 func (g *group) V1alpha1() v1alpha1.Interface {
 	return v1alpha1.New(g.factory, g.namespace, g.tweakListOptions)
 }
-<<<<<<< HEAD
-=======
 
 // V1beta1 returns a new v1beta1.Interface.
 func (g *group) V1beta1() v1beta1.Interface {
 	return v1beta1.New(g.factory, g.namespace, g.tweakListOptions)
 }
->>>>>>> 1.1.0-snapshot.4

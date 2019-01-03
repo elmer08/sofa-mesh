@@ -123,8 +123,6 @@ func (m *HttpConnectionManager) Validate() error {
 		}
 	}
 
-<<<<<<< HEAD
-=======
 	if v, ok := interface{}(m.GetStreamIdleTimeout()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return HttpConnectionManagerValidationError{
@@ -145,7 +143,6 @@ func (m *HttpConnectionManager) Validate() error {
 		}
 	}
 
->>>>>>> 1.1.0-snapshot.4
 	if v, ok := interface{}(m.GetDrainTimeout()).(interface{ Validate() error }); ok {
 		if err := v.Validate(); err != nil {
 			return HttpConnectionManagerValidationError{

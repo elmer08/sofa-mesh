@@ -92,7 +92,13 @@ func (m *LoadStatsRequest) GetClusterStats() []*endpoint.ClusterStats {
 type LoadStatsResponse struct {
 	// Clusters to report stats for.
 	Clusters []string `protobuf:"bytes,1,rep,name=clusters" json:"clusters,omitempty"`
-	// The interval of time to collect stats. The default is 10 seconds.
+	// The minimum interval of time to collect stats over. This is only a minimum for two reasons:
+	// 1. There may be some delay from when the timer fires until stats sampling occurs.
+	// 2. For clusters that were already feature in the previous *LoadStatsResponse*, any traffic
+	//    that is observed in between the corresponding previous *LoadStatsRequest* and this
+	//    *LoadStatsResponse* will also be accumulated and billed to the cluster. This avoids a period
+	//    of inobservability that might otherwise exists between the messages. New clusters are not
+	//    subject to this consideration.
 	LoadReportingInterval *types.Duration `protobuf:"bytes,2,opt,name=load_reporting_interval,json=loadReportingInterval" json:"load_reporting_interval,omitempty"`
 	// Set to *true* if the management server supports endpoint granularity
 	// report.

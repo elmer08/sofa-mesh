@@ -250,16 +250,12 @@ func (m *HeaderValue) Validate() error {
 		return nil
 	}
 
-<<<<<<< HEAD
-	// no validation rules for Key
-=======
 	if l := len(m.GetKey()); l < 1 || l > 16384 {
 		return HeaderValueValidationError{
 			Field:  "Key",
 			Reason: "value length must be between 1 and 16384 bytes, inclusive",
 		}
 	}
->>>>>>> 1.1.0-snapshot.4
 
 	if len(m.GetValue()) > 16384 {
 		return HeaderValueValidationError{

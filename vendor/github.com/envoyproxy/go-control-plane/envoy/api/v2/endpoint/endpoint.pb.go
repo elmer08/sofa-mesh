@@ -37,15 +37,9 @@ type Endpoint struct {
 	//   specified :ref:`resolver <envoy_api_field_core.SocketAddress.resolver_name>`
 	//   in the Address). For LOGICAL or STRICT DNS, it is expected to be hostname,
 	//   and will be resolved via DNS.
-<<<<<<< HEAD
-	Address *envoy_api_v2_core1.Address `protobuf:"bytes,1,opt,name=address" json:"address,omitempty"`
-	// [#not-implemented-hide:] The optional health check configuration is used as
-	// configuration for the health checker to contact the health checked host.
-=======
 	Address *core.Address `protobuf:"bytes,1,opt,name=address" json:"address,omitempty"`
 	// The optional health check configuration is used as configuration for the
 	// health checker to contact the health checked host.
->>>>>>> 1.1.0-snapshot.4
 	//
 	// .. attention::
 	//
@@ -104,7 +98,7 @@ func (m *Endpoint) GetHealthCheckConfig() *Endpoint_HealthCheckConfig {
 	return nil
 }
 
-// [#not-implemented-hide:] The optional health check configuration.
+// The optional health check configuration.
 type Endpoint_HealthCheckConfig struct {
 	// Optional alternative health check port value.
 	//

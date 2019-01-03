@@ -236,8 +236,6 @@ func (m *Route) Validate() error {
 
 	// no validation rules for PerFilterConfig
 
-<<<<<<< HEAD
-=======
 	// no validation rules for TypedPerFilterConfig
 
 	if len(m.GetRequestHeadersToAdd()) > 1000 {
@@ -284,7 +282,6 @@ func (m *Route) Validate() error {
 
 	}
 
->>>>>>> 1.1.0-snapshot.4
 	switch m.Action.(type) {
 
 	case *Route_Route:
@@ -684,6 +681,20 @@ func (m *RouteAction) Validate() error {
 				Cause:  err,
 			}
 		}
+	}
+
+	if d := m.GetIdleTimeout(); d != nil {
+		dur := *d
+
+		gt := time.Duration(0*time.Second + 0*time.Nanosecond)
+
+		if dur <= gt {
+			return RouteActionValidationError{
+				Field:  "IdleTimeout",
+				Reason: "value must be greater than 0s",
+			}
+		}
+
 	}
 
 	if v, ok := interface{}(m.GetRetryPolicy()).(interface{ Validate() error }); ok {
@@ -1219,18 +1230,6 @@ func (m *HeaderMatcher) Validate() error {
 		return HeaderMatcherValidationError{
 			Field:  "Name",
 			Reason: "value length must be at least 1 bytes",
-		}
-	}
-
-	// no validation rules for Value
-
-	if v, ok := interface{}(m.GetRegex()).(interface{ Validate() error }); ok {
-		if err := v.Validate(); err != nil {
-			return HeaderMatcherValidationError{
-				Field:  "Regex",
-				Reason: "embedded message failed validation",
-				Cause:  err,
-			}
 		}
 	}
 
