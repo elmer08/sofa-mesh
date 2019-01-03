@@ -1,2 +1,6 @@
+<<<<<<< HEAD
 *.pb.go
+=======
+*.pb.go
+>>>>>>> 1.1.0-snapshot.4
 *_test.go

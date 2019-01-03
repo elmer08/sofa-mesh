@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 syntax = "proto3";
 package merge;
 
@@ -9,4 +10,17 @@ message A {
 
 message B {
   int64 c = 1;
+=======
+syntax = "proto3";
+package merge;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+message A {
+  B B = 1 [(gogoproto.nullable) = false];
+}
+
+message B {
+  int64 c = 1;
+>>>>>>> 1.1.0-snapshot.4
 }

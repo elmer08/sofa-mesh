@@ -26,8 +26,13 @@ const (
 	KubernetesRegistry ServiceRegistry = "Kubernetes"
 	// ConsulRegistry is a service registry backed by Consul
 	ConsulRegistry ServiceRegistry = "Consul"
+<<<<<<< HEAD
 	// CloudFoundryRegistry is a service registry backed by Cloud Foundry.
 	CloudFoundryRegistry ServiceRegistry = "CloudFoundry"
 	// ZookeeperRegistry environment flag
 	ZookeeperRegistry = "Zookeeper"
+=======
+	// MCPRegistry is a service registry backed by MCP ServiceEntries
+	MCPRegistry ServiceRegistry = "MCP"
+>>>>>>> 1.1.0-snapshot.4
 )

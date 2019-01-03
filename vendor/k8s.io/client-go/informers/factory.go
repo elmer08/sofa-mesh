@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
 Copyright 2018 The Kubernetes Authors.
+=======
+Copyright The Kubernetes Authors.
+>>>>>>> 1.1.0-snapshot.4
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,12 +49,22 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
+<<<<<<< HEAD
+=======
+// SharedInformerOption defines the functional option type for SharedInformerFactory.
+type SharedInformerOption func(*sharedInformerFactory) *sharedInformerFactory
+
+>>>>>>> 1.1.0-snapshot.4
 type sharedInformerFactory struct {
 	client           kubernetes.Interface
 	namespace        string
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	lock             sync.Mutex
 	defaultResync    time.Duration
+<<<<<<< HEAD
+=======
+	customResync     map[reflect.Type]time.Duration
+>>>>>>> 1.1.0-snapshot.4
 
 	informers map[reflect.Type]cache.SharedIndexInformer
 	// startedInformers is used for tracking which informers have been started.
@@ -58,14 +72,47 @@ type sharedInformerFactory struct {
 	startedInformers map[reflect.Type]bool
 }
 
+<<<<<<< HEAD
 // NewSharedInformerFactory constructs a new instance of sharedInformerFactory
 func NewSharedInformerFactory(client kubernetes.Interface, defaultResync time.Duration) SharedInformerFactory {
 	return NewFilteredSharedInformerFactory(client, defaultResync, v1.NamespaceAll, nil)
+=======
+// WithCustomResyncConfig sets a custom resync period for the specified informer types.
+func WithCustomResyncConfig(resyncConfig map[v1.Object]time.Duration) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		for k, v := range resyncConfig {
+			factory.customResync[reflect.TypeOf(k)] = v
+		}
+		return factory
+	}
+}
+
+// WithTweakListOptions sets a custom filter on all listers of the configured SharedInformerFactory.
+func WithTweakListOptions(tweakListOptions internalinterfaces.TweakListOptionsFunc) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.tweakListOptions = tweakListOptions
+		return factory
+	}
+}
+
+// WithNamespace limits the SharedInformerFactory to the specified namespace.
+func WithNamespace(namespace string) SharedInformerOption {
+	return func(factory *sharedInformerFactory) *sharedInformerFactory {
+		factory.namespace = namespace
+		return factory
+	}
+}
+
+// NewSharedInformerFactory constructs a new instance of sharedInformerFactory for all namespaces.
+func NewSharedInformerFactory(client kubernetes.Interface, defaultResync time.Duration) SharedInformerFactory {
+	return NewSharedInformerFactoryWithOptions(client, defaultResync)
+>>>>>>> 1.1.0-snapshot.4
 }
 
 // NewFilteredSharedInformerFactory constructs a new instance of sharedInformerFactory.
 // Listers obtained via this SharedInformerFactory will be subject to the same filters
 // as specified here.
+<<<<<<< HEAD
 func NewFilteredSharedInformerFactory(client kubernetes.Interface, defaultResync time.Duration, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) SharedInformerFactory {
 	return &sharedInformerFactory{
 		client:           client,
@@ -75,6 +122,30 @@ func NewFilteredSharedInformerFactory(client kubernetes.Interface, defaultResync
 		informers:        make(map[reflect.Type]cache.SharedIndexInformer),
 		startedInformers: make(map[reflect.Type]bool),
 	}
+=======
+// Deprecated: Please use NewSharedInformerFactoryWithOptions instead
+func NewFilteredSharedInformerFactory(client kubernetes.Interface, defaultResync time.Duration, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) SharedInformerFactory {
+	return NewSharedInformerFactoryWithOptions(client, defaultResync, WithNamespace(namespace), WithTweakListOptions(tweakListOptions))
+}
+
+// NewSharedInformerFactoryWithOptions constructs a new instance of a SharedInformerFactory with additional options.
+func NewSharedInformerFactoryWithOptions(client kubernetes.Interface, defaultResync time.Duration, options ...SharedInformerOption) SharedInformerFactory {
+	factory := &sharedInformerFactory{
+		client:           client,
+		namespace:        v1.NamespaceAll,
+		defaultResync:    defaultResync,
+		informers:        make(map[reflect.Type]cache.SharedIndexInformer),
+		startedInformers: make(map[reflect.Type]bool),
+		customResync:     make(map[reflect.Type]time.Duration),
+	}
+
+	// Apply all options
+	for _, opt := range options {
+		factory = opt(factory)
+	}
+
+	return factory
+>>>>>>> 1.1.0-snapshot.4
 }
 
 // Start initializes all requested informers.
@@ -123,7 +194,17 @@ func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internal
 	if exists {
 		return informer
 	}
+<<<<<<< HEAD
 	informer = newFunc(f.client, f.defaultResync)
+=======
+
+	resyncPeriod, exists := f.customResync[informerType]
+	if !exists {
+		resyncPeriod = f.defaultResync
+	}
+
+	informer = newFunc(f.client, resyncPeriod)
+>>>>>>> 1.1.0-snapshot.4
 	f.informers[informerType] = informer
 
 	return informer

@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
 Copyright 2018 The Kubernetes Authors.
+=======
+Copyright The Kubernetes Authors.
+>>>>>>> 1.1.0-snapshot.4
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,6 +45,10 @@ import (
 	rbac_v1alpha1 "k8s.io/api/rbac/v1alpha1"
 	rbac_v1beta1 "k8s.io/api/rbac/v1beta1"
 	scheduling_v1alpha1 "k8s.io/api/scheduling/v1alpha1"
+<<<<<<< HEAD
+=======
+	scheduling_v1beta1 "k8s.io/api/scheduling/v1beta1"
+>>>>>>> 1.1.0-snapshot.4
 	settings_v1alpha1 "k8s.io/api/settings/v1alpha1"
 	storage_v1 "k8s.io/api/storage/v1"
 	storage_v1alpha1 "k8s.io/api/storage/v1alpha1"
@@ -235,6 +243,13 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	case scheduling_v1alpha1.SchemeGroupVersion.WithResource("priorityclasses"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Scheduling().V1alpha1().PriorityClasses().Informer()}, nil
 
+<<<<<<< HEAD
+=======
+		// Group=scheduling.k8s.io, Version=v1beta1
+	case scheduling_v1beta1.SchemeGroupVersion.WithResource("priorityclasses"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Scheduling().V1beta1().PriorityClasses().Informer()}, nil
+
+>>>>>>> 1.1.0-snapshot.4
 		// Group=settings.k8s.io, Version=v1alpha1
 	case settings_v1alpha1.SchemeGroupVersion.WithResource("podpresets"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Settings().V1alpha1().PodPresets().Informer()}, nil

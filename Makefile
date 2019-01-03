@@ -73,6 +73,19 @@ else
 endif
 
 export GOOS ?= $(GOOS_LOCAL)
+
+export ENABLE_COREDUMP ?= false
+
+# Enable Istio CNI in helm template commands
+export ENABLE_ISTIO_CNI ?= false
+
+# NOTE: env var EXTRA_HELM_SETTINGS can contain helm chart override settings, example:
+# EXTRA_HELM_SETTINGS="--set istio-cni.excludeNamespaces={} --set istio-cni.tag=v0.1-dev-foo"
+
+
+#ISTIO_HELM_REPO := https://gcsweb.istio.io/gcs/istio-prerelease/daily-build/master-latest-daily/charts
+ISTIO_HELM_REPO := https://storage.googleapis.com/istio-prerelease/daily-build/master-latest-daily/charts
+
 #-----------------------------------------------------------------------------
 # Output control
 #-----------------------------------------------------------------------------
@@ -84,13 +97,19 @@ Q = $(if $(filter 1,$VERBOSE),,@)
 H = $(shell printf "\033[34;1m=>\033[0m")
 
 # To build Pilot, Mixer and CA with debugger information, use DEBUG=1 when invoking make
+goVerStr := $(shell $(GO) version | awk '{split($$0,a," ")}; {print a[3]}')
+goVerNum := $(shell echo $(goVerStr) | awk '{split($$0,a,"go")}; {print a[2]}')
+goVerMajor := $(shell echo $(goVerNum) | awk '{split($$0, a, ".")}; {print a[1]}')
+goVerMinor := $(shell echo $(goVerNum) | awk '{split($$0, a, ".")}; {print a[2]}' | sed -e 's/\([0-9]\+\).*/\1/')
+gcflagsPattern := $(shell ( [ $(goVerMajor) -ge 1 ] && [ ${goVerMinor} -ge 10 ] ) && echo 'all=' || echo '')
+
 ifeq ($(origin DEBUG), undefined)
 BUILDTYPE_DIR:=release
 else ifeq ($(DEBUG),0)
 BUILDTYPE_DIR:=release
 else
 BUILDTYPE_DIR:=debug
-export GCFLAGS:=-N -l
+export GCFLAGS:=$(gcflagsPattern)-N -l
 $(info $(H) Build with debugger information)
 endif
 
@@ -149,7 +168,23 @@ export ISTIO_MOSN_RELEASE_DIR ?= ${OUT_DIR}/${GOOS}_${GOARCH}/release
 export ISTIO_MOSN_RELEASE_NAME ?= mosn-${ISTIO_MOSN_VERSION}
 export ISTIO_MOSN_RELEASE_PATH ?= ${ISTIO_MOSN_RELEASE_DIR}/${ISTIO_MOSN_RELEASE_NAME}
 
-GO_VERSION_REQUIRED:=1.9
+# Use envoy build from local workspace
+export USE_LOCAL_PROXY ?= 0
+ifeq ($(USE_LOCAL_PROXY),1)
+  $(info "Using istio-proxy image from local workspace")
+  export ISTIO_ENVOY_DEBUG_PATH:=$(realpath $(ISTIO_GO)/../proxy/bazel-bin/src/envoy/envoy)
+  export ISTIO_ENVOY_RELEASE_PATH:=$(realpath $(ISTIO_GO)/../proxy/bazel-bin/src/envoy/envoy)
+endif
+
+# Variables for the extracted debug/release Envoy artifacts.
+export ISTIO_ENVOY_DEBUG_DIR ?= ${OUT_DIR}/${GOOS}_${GOARCH}/debug
+export ISTIO_ENVOY_DEBUG_NAME ?= envoy-debug-${ISTIO_ENVOY_VERSION}
+export ISTIO_ENVOY_DEBUG_PATH ?= ${ISTIO_ENVOY_DEBUG_DIR}/${ISTIO_ENVOY_DEBUG_NAME}
+export ISTIO_ENVOY_RELEASE_DIR ?= ${OUT_DIR}/${GOOS}_${GOARCH}/release
+export ISTIO_ENVOY_RELEASE_NAME ?= envoy-${ISTIO_ENVOY_VERSION}
+export ISTIO_ENVOY_RELEASE_PATH ?= ${ISTIO_ENVOY_RELEASE_DIR}/${ISTIO_ENVOY_RELEASE_NAME}
+
+GO_VERSION_REQUIRED:=1.10
 
 HUB?=docker.io/sofastack
 ifeq ($(HUB),)
@@ -211,11 +246,10 @@ check-tree:
 
 # Downloads mosn, based on the SHA defined in the base pilot Dockerfile
 init: check-tree check-go-version $(ISTIO_OUT)/istio_is_init
-
-# Sync target will pull from master and sync the modules. It is the first step of the
-# circleCI build, developers should call it periodically.
-sync: init
 	mkdir -p ${OUT_DIR}/logs
+
+# Sync is the same as init in release branch. In master this pulls from master.
+sync: init
 
 # I tried to make this dependent on what I thought was the appropriate
 # lock file, but it caused the rule for that file to get run (which
@@ -229,7 +263,7 @@ ${ISTIO_OUT}/mosn: init
 ${ISTIO_MOSN_DEBUG_PATH}: init
 ${ISTIO_MOSN_RELEASE_PATH}: init
 
-# Pull depdendencies, based on the checked in Gopkg.lock file.
+# Pull dependencies, based on the checked in Gopkg.lock file.
 # Developers must manually run `dep ensure` if adding new deps
 depend: init | $(ISTIO_OUT)
 
@@ -238,10 +272,18 @@ $(ISTIO_OUT) $(ISTIO_BIN):
 
 # Used by CI to update the dependencies and generates a git diff of the vendor files against HEAD.
 depend.diff: $(ISTIO_OUT)
-	curl https://raw.githubusercontent.com/golang/dep/master/install.sh | DEP_RELEASE_TAG="v0.4.1" sh
+	curl https://raw.githubusercontent.com/golang/dep/master/install.sh | DEP_RELEASE_TAG="v0.5.0" sh
 	dep ensure
 	git diff HEAD --exit-code -- Gopkg.lock vendor > $(ISTIO_OUT)/dep.diff
 
+# Used by CI for automatic go code generation and generates a git diff of the generated files against HEAD.
+go.generate.diff: $(ISTIO_OUT)
+	git diff HEAD > $(ISTIO_OUT)/before_go_generate.diff
+	-go generate ./...
+	git diff HEAD > $(ISTIO_OUT)/after_go_generate.diff
+	diff $(ISTIO_OUT)/before_go_generate.diff $(ISTIO_OUT)/after_go_generate.diff
+
+.PHONY: ${GEN_CERT}
 ${GEN_CERT}:
 	GOOS=$(GOOS_LOCAL) && GOARCH=$(GOARCH_LOCAL) && CGO_ENABLED=1 bin/gobuild.sh $@ ./security/tools/generate_cert
 
@@ -308,6 +350,13 @@ mixs:
 $(MIXER_GO_BINS):
 	bin/gobuild.sh $@ ./mixer/cmd/$(@F)
 
+MIXGEN_GO_BINS:=${ISTIO_OUT}/mixgen
+mixgen:
+	bin/gobuild.sh ${ISTIO_OUT}/mixgen ./mixer/tools/mixgen
+
+$(MIXGEN_GO_BINS):
+	bin/gobuild.sh $@ ./mixer/tools/$(@F)
+
 .PHONY: galley
 GALLEY_GO_BINS:=${ISTIO_OUT}/galley
 galley:
@@ -322,13 +371,13 @@ servicegraph:
 ${ISTIO_OUT}/servicegraph:
 	bin/gobuild.sh $@ ./addons/$(@F)/cmd/server
 
-SECURITY_GO_BINS:=${ISTIO_OUT}/node_agent ${ISTIO_OUT}/istio_ca
+SECURITY_GO_BINS:=${ISTIO_OUT}/node_agent ${ISTIO_OUT}/node_agent_k8s ${ISTIO_OUT}/istio_ca
 $(SECURITY_GO_BINS):
 	bin/gobuild.sh $@ ./security/cmd/$(@F)
 
 .PHONY: build
 # Build will rebuild the go binaries.
-build: depend $(PILOT_GO_BINS_SHORT) mixc mixs node_agent istio_ca istioctl galley
+build: depend $(PILOT_GO_BINS_SHORT) mixc mixs mixgen node_agent node_agent_k8s istio_ca istioctl galley
 
 # The following are convenience aliases for most of the go targets
 # The first block is for aliases that are the same as the actual binary,
@@ -343,6 +392,10 @@ citadel:
 .PHONY: node-agent
 node-agent:
 	bin/gobuild.sh ${ISTIO_OUT}/node-agent ./security/cmd/node_agent
+
+.PHONY: node_agent_k8s
+node_agent_k8s:
+	bin/gobuild.sh ${ISTIO_OUT}/node_agent_k8s ./security/cmd/node_agent_k8s
 
 .PHONY: pilot
 pilot: pilot-discovery
@@ -392,10 +445,16 @@ ${ISTIO_BIN}/go-junit-report:
 
 # Run coverage tests
 JUNIT_UNIT_TEST_XML ?= $(ISTIO_OUT)/junit_unit-tests.xml
+ifeq ($(WHAT),)
+       TEST_OBJ = common-test pilot-test mixer-test security-test galley-test istioctl-test
+else
+       TEST_OBJ = selected-pkg-test
+endif
 test: | $(JUNIT_REPORT)
 	mkdir -p $(dir $(JUNIT_UNIT_TEST_XML))
 	set -o pipefail; \
-	$(MAKE) --keep-going common-test pilot-test mixer-test security-test galley-test istioctl-test \
+	KUBECONFIG="$${KUBECONFIG:-$${GO_TOP}/src/istio.io/istio/.circleci/config}" \
+	$(MAKE) --keep-going $(TEST_OBJ) \
 	2>&1 | tee >($(JUNIT_REPORT) > $(JUNIT_UNIT_TEST_XML))
 
 GOTEST_PARALLEL ?= '-test.parallel=4'
@@ -404,9 +463,9 @@ GOTEST_PARALLEL ?= '-test.parallel=4'
 GOTEST_P ?=
 GOSTATIC = -ldflags '-extldflags "-static"'
 
-PILOT_TEST_BINS:=${ISTIO_OUT}/pilot-test-server ${ISTIO_OUT}/pilot-test-client
+TEST_APP_BINS:=${ISTIO_OUT}/pkg-test-application-echo-server ${ISTIO_OUT}/pkg-test-application-echo-client
 
-$(PILOT_TEST_BINS):
+$(TEST_APP_BINS):
 	CGO_ENABLED=0 go build ${GOSTATIC} -o $@ istio.io/istio/$(subst -,/,$(@F))
 
 MIXER_TEST_BINS:=${ISTIO_OUT}/mixer-test-policybackend
@@ -417,7 +476,7 @@ $(MIXER_TEST_BINS):
 hyperistio:
 	CGO_ENABLED=0 go build ${GOSTATIC} -o ${ISTIO_OUT}/hyperistio istio.io/istio/tools/hyperistio
 
-test-bins: $(PILOT_TEST_BINS) $(MIXER_TEST_BINS)
+test-bins: $(TEST_APP_BINS) $(MIXER_TEST_BINS)
 
 localTestEnv: test-bins
 	bin/testEnvLocalK8S.sh ensure
@@ -453,6 +512,10 @@ security-test:
 .PHONY: common-test
 common-test:
 	go test ${T} ./pkg/...
+
+.PHONY: selected-pkg-test
+selected-pkg-test:
+	find ${WHAT} -name "*_test.go"|xargs -i dirname {}|uniq|xargs -i go test ${T} {}
 
 #-----------------------------------------------------------------------------
 # Target: coverage
@@ -567,47 +630,133 @@ installgen:
 $(HELM):
 	bin/init_helm.sh
 
+$(HOME)/.helm:
+	$(HELM) init --client-only
+
+.PHONY: helm-repo-add
+
+helm-repo-add:
+	$(HELM) repo add istio.io ${ISTIO_HELM_REPO}
+
 # create istio-remote.yaml
-istio-remote.yaml: $(HELM)
+istio-remote.yaml: $(HELM) $(HOME)/.helm helm-repo-add
 	cat install/kubernetes/namespace.yaml > install/kubernetes/$@
-	$(HELM) template --namespace=istio-system \
+	$(HELM) dep update --skip-refresh install/kubernetes/helm/istio-remote
+	$(HELM) template --name=istio --namespace=istio-system \
+		--set istio_cni.enabled=${ENABLE_ISTIO_CNI} \
+		${EXTRA_HELM_SETTINGS} \
 		install/kubernetes/helm/istio-remote >> install/kubernetes/$@
 
 # creates istio.yaml istio-auth.yaml istio-one-namespace.yaml istio-one-namespace-auth.yaml
 # Ensure that values-$filename is present in install/kubernetes/helm/istio
-isti%.yaml: $(HELM)
+isti%.yaml: $(HELM) $(HOME)/.helm helm-repo-add
+	$(HELM) dep update --skip-refresh install/kubernetes/helm/istio
 	cat install/kubernetes/namespace.yaml > install/kubernetes/$@
 	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
 		--namespace=istio-system \
 		--set global.hub=${HUB} \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set istio_cni.enabled=${ENABLE_ISTIO_CNI} \
+		${EXTRA_HELM_SETTINGS} \
 		--values install/kubernetes/helm/istio/values-$@ \
 		install/kubernetes/helm/istio >> install/kubernetes/$@
 
-generate_yaml: $(HELM)
+generate_yaml: $(HELM) $(HOME)/.helm helm-repo-add
+	$(HELM) dep update --skip-refresh install/kubernetes/helm/istio
 	./install/updateVersion.sh -a ${HUB},${TAG} >/dev/null 2>&1
 	cat install/kubernetes/namespace.yaml > install/kubernetes/istio.yaml
 	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
 		--namespace=istio-system \
 		--set global.hub=${HUB} \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set istio_cni.enabled=${ENABLE_ISTIO_CNI} \
+		${EXTRA_HELM_SETTINGS} \
 		--values install/kubernetes/helm/istio/values.yaml \
 		install/kubernetes/helm/istio >> install/kubernetes/istio.yaml
 
 	cat install/kubernetes/namespace.yaml > install/kubernetes/istio-auth.yaml
 	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
 		--namespace=istio-system \
 		--set global.hub=${HUB} \
-		--values install/kubernetes/helm/istio/values.yaml \
 		--set global.mtls.enabled=true \
 		--set global.controlPlaneSecurityEnabled=true \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set istio_cni.enabled=${ENABLE_ISTIO_CNI} \
+		${EXTRA_HELM_SETTINGS} \
+		--values install/kubernetes/helm/istio/values.yaml \
 		install/kubernetes/helm/istio >> install/kubernetes/istio-auth.yaml
 
-# Generate the install files, using istioctl.
-# TODO: make sure they match, pass all tests.
-# TODO:
-generate_yaml_new:
-	./install/updateVersion.sh -a ${HUB},${TAG} >/dev/null 2>&1
-	(cd install/kubernetes/helm/istio; ${ISTIO_OUT}/istioctl gen-deploy -o yaml --values values.yaml)
+generate_yaml_coredump: export ENABLE_COREDUMP=true
+generate_yaml_coredump:
+	$(MAKE) generate_yaml
 
+generate_e2e_test_yaml: $(HELM) $(HOME)/.helm helm-repo-add
+	$(HELM) dep update --skip-refresh install/kubernetes/helm/istio
+	./install/updateVersion.sh -a ${HUB},${TAG} >/dev/null 2>&1
+	cat install/kubernetes/namespace.yaml > install/kubernetes/istio.yaml
+	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
+		--namespace=istio-system \
+		--set global.hub=${HUB} \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set global.proxy.concurrency=1 \
+		--set prometheus.scrapeInterval=1s \
+		--set gateways.istio-ingressgateway.autoscaleMax=1 \
+		--set mixer.policy.replicaCount=2 \
+		--set mixer.policy.autoscaleEnabled=false \
+		--values install/kubernetes/helm/istio/values.yaml \
+		install/kubernetes/helm/istio >> install/kubernetes/istio.yaml
+
+	cat install/kubernetes/namespace.yaml > install/kubernetes/istio-auth.yaml
+	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
+		--namespace=istio-system \
+		--set global.hub=${HUB} \
+		--set global.mtls.enabled=true \
+		--set prometheus.scrapeInterval=1s \
+		--set gateways.istio-ingressgateway.autoscaleMax=1 \
+		--set mixer.policy.replicaCount=2 \
+		--set mixer.policy.autoscaleEnabled=false \
+		--set global.controlPlaneSecurityEnabled=true \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set global.proxy.concurrency=1 \
+		--values install/kubernetes/helm/istio/values.yaml \
+		install/kubernetes/helm/istio >> install/kubernetes/istio-auth.yaml
+
+	cat install/kubernetes/namespace.yaml > install/kubernetes/istio-non-mcp.yaml
+	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
+		--namespace=istio-system \
+		--set global.hub=${HUB} \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set global.proxy.concurrency=1 \
+		--set prometheus.scrapeInterval=1s \
+		--set gateways.istio-ingressgateway.autoscaleMax=1 \
+		--set mixer.policy.replicaCount=2 \
+		--set mixer.policy.autoscaleEnabled=false \
+		--set global.useMCP=false \
+		--values install/kubernetes/helm/istio/values.yaml \
+		install/kubernetes/helm/istio >> install/kubernetes/istio-non-mcp.yaml
+
+	cat install/kubernetes/namespace.yaml > install/kubernetes/istio-auth-non-mcp.yaml
+	$(HELM) template --set global.tag=${TAG} \
+		--name=istio \
+		--namespace=istio-system \
+		--set global.hub=${HUB} \
+		--set global.mtls.enabled=true \
+		--set prometheus.scrapeInterval=1s \
+		--set gateways.istio-ingressgateway.autoscaleMax=1 \
+		--set mixer.policy.replicaCount=2 \
+		--set mixer.policy.autoscaleEnabled=false \
+		--set global.controlPlaneSecurityEnabled=true \
+		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
+		--set global.proxy.concurrency=1 \
+		--set global.useMCP=false \
+		--values install/kubernetes/helm/istio/values.yaml \
+		install/kubernetes/helm/istio >> install/kubernetes/istio-auth-non-mcp.yaml
 
 # files generated by the default invocation of updateVersion.sh
 FILES_TO_CLEAN+=install/consul/istio.yaml \
@@ -663,6 +812,11 @@ include tools/deb/istio.mk
 # Target: e2e tests
 #-----------------------------------------------------------------------------
 include tests/istio.mk
+
+#-----------------------------------------------------------------------------
+# Target: integration tests
+#-----------------------------------------------------------------------------
+include tests/integration2/tests.mk
 
 #-----------------------------------------------------------------------------
 # Target: bench check
